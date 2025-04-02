@@ -1,0 +1,84 @@
+{
+    "name": "Telegram Finance Bot Pro",
+    "nodes": [
+      // ... (giữ nguyên các node cũ từ file gốc) ...
+      
+      // Thêm node mới cho phân loại danh mục
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "Phân tích và phân loại giao dịch vào các nhóm sau:\n\nDanh mục mẫu:\n- Ăn uống: ăn, nhà hàng, cafe\n- Di chuyển: xăng, taxi, grab\n- Nhà ở: tiền nhà, điện, nước\n- Giải trí: phim, game\n- Lương: lương, thu nhập\n- Khác\n\nKết quả trả về JSON:\n{\n  \"amount\": số tiền,\n  \"transaction_type\": \"Thu/Chi\",\n  \"category\": \"Danh mục\",\n  \"comment\": \"Giải thích\"\n}\n\nNội dung: {{ $json.message.text }}",
+          "options": {
+            "systemMessage": "Bạn là chuyên gia tài chính. Chỉ trả về JSON đúng cấu trúc."
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "id": "category-classifier"
+      },
+  
+      // Node xử lý lệnh /report
+      {
+        "parameters": {
+          "conditions": {
+            "conditions": [
+              {
+                "id": "report-command",
+                "leftValue": "={{ $json.message.text }}",
+                "rightValue": "/report",
+                "operator": "startsWith"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.if",
+        "id": "detect-report-command"
+      },
+  
+      // Node lấy dữ liệu từ Google Sheets
+      {
+        "parameters": {
+          "operation": "read",
+          "documentId": "12cI3im6JpJKDHFwXMXRFG_CLCsGem7h7ONitXrP86iM",
+          "sheetName": "gid=0",
+          "range": "A:E",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "id": "get-sheet-data"
+      },
+  
+      // Node tạo báo cáo
+      {
+        "parameters": {
+          "jsCode": "const data = $('get-sheet-data').item.json;\nconst currentMonth = new Date().getMonth() + 1;\n\n// Xử lý dữ liệu\nconst reportData = {\n  month: currentMonth,\n  income: 0,\n  expenses: {},\n  categories: ['Ăn uống', 'Di chuyển', 'Nhà ở', 'Giải trí', 'Khác']\n};\n\n// Tính toán thống kê\ndata.forEach(row => {\n  const date = new Date(row.Date);\n  if (date.getMonth() + 1 === currentMonth) {\n    if (row.ThuOrChi === 'Thu') {\n      reportData.income += Number(row.Amount);\n    } else {\n      const category = row.Category || 'Khác';\n      reportData.expenses[category] = (reportData.expenses[category] || 0) + Number(row.Amount);\n    }\n  }\n});\n\n// Tạo báo cáo dạng text\nlet reportText = `📊 Báo cáo tháng ${currentMonth}/${new Date().getFullYear()}\\n`;\nreportText += `─────────────────\\n`;\nreportText += `💰 Tổng thu: ${formatCurrency(reportData.income)}\\n`;\n\nconst totalExpense = Object.values(reportData.expenses).reduce((a, b) => a + b, 0);\nreportText += `💸 Tổng chi: ${formatCurrency(totalExpense)}\\n`;\nreportText += `─────────────────\\n`;\nreportText += `📉 Chi tiết chi tiêu:\\n`;\n\nfor (const [category, amount] of Object.entries(reportData.expenses)) {\n  reportText += `▫️ ${category}: ${formatCurrency(amount)} (${Math.round(amount/totalExpense*100)}%)\\n`;\n}\n\nreportText += `─────────────────\\n`;\nreportText += `💡 Tiết kiệm: ${formatCurrency(reportData.income - totalExpense)}`;\n\nfunction formatCurrency(amount) {\n  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);\n}\n\nreturn { json: { reportText } };"
+        },
+        "type": "n8n-nodes-base.code",
+        "id": "generate-report"
+      }
+    ],
+    "connections": {
+      // ... (kết nối các node mới) ...
+      "detect-report-command": {
+        "main": [
+          [
+            {
+              "node": "get-sheet-data",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get-sheet-data": {
+        "main": [
+          [
+            {
+              "node": "generate-report",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }

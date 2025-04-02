@@ -1,0 +1,447 @@
+{
+  "name": "Telegram Finance Bot Pro",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Phân tích đoạn văn bản sau, tách thông tin theo định dạng:\n\n{\n\"amount\": \"số tiền\",\n\"transaction_type\": \"Thu/Chi\",\n\"category\": \"Ăn uống/Di chuyển/Nhà ở/Giải trí/Lương/Khác\",\n\"comment\":\"Bình luận\"\n}\n\nQuy tắc:\n- Category dựa trên nội dung (VD: 'ăn nhậu' → 'Ăn uống')\n- Luôn trả về đủ 4 trường\n\nĐoạn văn bản: {{ $json.message.text }}",
+        "options": {
+          "systemMessage": "Bạn là chuyên gia tài chính tiếng Việt. Chỉ trả về JSON hợp lệ."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        -760,
+        -40
+      ],
+      "id": "5b5c1fcb-0f2d-4b77-9989-91db9a4a2c92",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "=deepseek-r1:8b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        -840,
+        180
+      ],
+      "id": "b36bf83a-aef1-4343-afa1-264e894ad472",
+      "name": "Ollama Chat Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "fB76RWVgdZg8oD1c",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "let note = $json.output;\n\n// Xử lý chuỗi JSON từ output\nnote = note.split(\"</think>\")[1].trim().replaceAll(\"\\n\", \"\").replaceAll(\"```\", \"\").replace(\"json\", \"\");\nnote = JSON.parse(note);\n\n// Gán thông tin bổ sung\nnote[\"content\"] = $('Telegram Trigger').item.json.message.text;\nnote[\"date\"] = new Date().toISOString();\n\n// Kiểm tra dữ liệu hợp lệ\nif (!note.amount || isNaN(note.amount) || note.amount <= 0) {\n    console.log(\"⚠ Amount không hợp lệ\");\n    return null;\n}\n\n// Đảm bảo có category\nnote[\"category\"] = note.category || 'Khác';\n\nreturn { json: { short_out: note } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        -40
+      ],
+      "id": "0d1be668-3996-45d2-b0c9-16f75c5373bc",
+      "name": "Code",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1100,
+        -20
+      ],
+      "id": "e28e5800-e1b5-467d-86cc-b0678fb45777",
+      "name": "Telegram Trigger",
+      "webhookId": "04d238bc-b52a-43b9-8934-6330dc37e541",
+      "credentials": {
+        "telegramApi": {
+          "id": "GBA9BLZY2Cp773aX",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=Xin lỗi. Hiện tôi chưa hiểu được nội dung chat của bạn. Bạn có thể nói lại rõ hơn được không. Xin cảm ơn!\n\nBạn nên dùng các cú pháp dễ hiểu như:\n- Thu 100K vì được cho\n- Chi 500K để sửa xe máy",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        60,
+        100
+      ],
+      "id": "650572fc-089f-459a-9f95-ad05c2db2631",
+      "name": "Telegram",
+      "webhookId": "52f636eb-4e13-46aa-8bff-cbeea32ff18a",
+      "credentials": {
+        "telegramApi": {
+          "id": "GBA9BLZY2Cp773aX",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=Chúng tôi đã cập nhật vào bảng thu chi của bạn. Xin cảm ơn!\n\nTuy nhiên, tôi có ý kiến về chi tiêu của bạn như sau:\n{{ $('Code').item.json.short_out.comment }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        380,
+        -160
+      ],
+      "id": "41ac9afc-4b54-4603-b567-dc20b3b96307",
+      "name": "Telegram1",
+      "webhookId": "1d98e40b-9906-4496-995f-c39a68e334f4",
+      "credentials": {
+        "telegramApi": {
+          "id": "GBA9BLZY2Cp773aX",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7d08a750-946d-4076-b7cd-7851afa49253",
+              "leftValue": "={{ $json.short_out.transaction_type }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -160,
+        -160
+      ],
+      "id": "805e569e-56b1-43ff-98f3-20d7ae246367",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "12cI3im6JpJKDHFwXMXRFG_CLCsGem7h7ONitXrP86iM",
+          "mode": "list",
+          "cachedResultName": "ThuChi2025",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12cI3im6JpJKDHFwXMXRFG_CLCsGem7h7ONitXrP86iM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1iWdY9kjmz83cgI957nD3xZNtJChWL2LMjyNID-yfIuM/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $json.short_out.date }}",
+            "ThuOrChi": "={{ $json.short_out.transaction_type }}",
+            "Content": "={{ $json.short_out.content }}",
+            "Amount": "={{ $json.short_out.amount }}",
+            "Category": "={{ $json.short_out.category }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ThuOrChi",
+              "displayName": "ThuOrChi",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Amount",
+              "displayName": "Amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Content",
+              "displayName": "Content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        120,
+        -140
+      ],
+      "id": "fe630414-3271-4e05-9e10-5cf2fc2890e6",
+      "name": "Google Sheets1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "pGFTHuz9odK3wNYo",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    // THÊM CÁC NODE MỚI
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "report-command",
+              "leftValue": "={{ $json.message.text }}",
+              "rightValue": "/report",
+              "operator": "startsWith"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "position": [
+        -160,
+        100
+      ],
+      "id": "detect-report-command",
+      "name": "Detect Report Command"
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": "12cI3im6JpJKDHFwXMXRFG_CLCsGem7h7ONitXrP86iM",
+        "sheetName": "gid=0",
+        "range": "A:E",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        0,
+        100
+      ],
+      "id": "get-sheet-data",
+      "name": "Get Sheet Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('get-sheet-data').item.json;\nconst currentMonth = new Date().getMonth() + 1;\n\n// Xử lý dữ liệu\nconst reportData = {\n  income: 0,\n  expenses: {},\n  categories: ['Ăn uống', 'Di chuyển', 'Nhà ở', 'Giải trí', 'Lương', 'Khác']\n};\n\ndata.forEach(row => {\n  const date = new Date(row.Date);\n  if (date.getMonth() + 1 === currentMonth) {\n    if (row.ThuOrChi === 'Thu') {\n      reportData.income += Number(row.Amount);\n    } else {\n      const category = row.Category || 'Khác';\n      reportData.expenses[category] = (reportData.expenses[category] || 0) + Number(row.Amount);\n    }\n  }\n});\n\n// Tạo báo cáo\nlet reportText = `📊 BÁO CÁO THÁNG ${currentMonth}/${new Date().getFullYear()}\\n`;\nreportText += `─────────────────\\n`;\nreportText += `💰 Tổng thu: ${formatCurrency(reportData.income)}\\n`;\n\nconst totalExpense = Object.values(reportData.expenses).reduce((a, b) => a + b, 0);\nreportText += `💸 Tổng chi: ${formatCurrency(totalExpense)}\\n`;\nreportText += `─────────────────\\n`;\nreportText += `📉 CHI TIẾT:\\n`;\n\nfor (const [category, amount] of Object.entries(reportData.expenses)) {\n  reportText += `• ${category}: ${formatCurrency(amount)} (${Math.round(amount/totalExpense*100)}%)\\n`;\n}\n\nreportText += `─────────────────\\n`;\nreportText += `💡 Tiết kiệm: ${formatCurrency(reportData.income - totalExpense)}`;\n\nfunction formatCurrency(amount) {\n  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);\n}\n\nreturn { json: { reportText } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "position": [
+        200,
+        100
+      ],
+      "id": "generate-report",
+      "name": "Generate Report"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $('generate-report').item.json.reportText }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "position": [
+        400,
+        100
+      ],
+      "id": "report-telegram",
+      "name": "Send Report"
+    }
+  ],
+  "connections": {
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "detect-report-command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets1": {
+      "main": [
+        [
+          {
+            "node": "Telegram1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "detect-report-command": {
+      "main": [
+        [
+          {
+            "node": "get-sheet-data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get-sheet-data": {
+      "main": [
+        [
+          {
+            "node": "generate-report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "generate-report": {
+      "main": [
+        [
+          {
+            "node": "report-telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "3d420fe7c04378dc935594f6f6008d658975d1ecad4fc6c52ccec68520f7a1c2"
+  },
+  "id": "oX1MoVzb05IQXTTW",
+  "tags": []
+}
